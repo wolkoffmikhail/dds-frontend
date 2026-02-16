@@ -34,10 +34,5 @@
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"
-  },
-  "scripts": {
-  "dev": "next dev",
-  "build": "NEXT_PUBLIC_SUPABASE_URL=http://192.168.0.22:8001 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3MDg4Njg2MCwiZXhwIjo0OTI2NTYwNDYwLCJyb2xlIjoiYW5vbiJ9.rEHrdNVvyxrQ53Jep59VW-Vk2sHkMzInWeviQJYSDVc NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3MDg4Njg2MCwiZXhwIjo0OTI2NTYwNDYwLCJyb2xlIjoiYW5vbiJ9.rEHrdNVvyxrQ53Jep59VW-Vk2sHkMzInWeviQJYSDVc next build",
-  "start": "next start"
-}
+  }
 }
