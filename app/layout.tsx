@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { SupabaseProvider } from './supabase-provider' // <-- Добавьте импорт
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : "http://localhost:3000";
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
@@ -33,7 +36,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <SupabaseProvider> {/* <-- Добавьте обёртку */}
+            {children}
+          </SupabaseProvider>
         </ThemeProvider>
       </body>
     </html>

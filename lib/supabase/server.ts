@@ -6,6 +6,9 @@ import { cookies } from "next/headers";
  * global variable. Always create a new client within each function when using
  * it.
  */
+ 
+export const dynamic = 'force-dynamic'
+
 export async function createClient() {
   const cookieStore = await cookies();
 
