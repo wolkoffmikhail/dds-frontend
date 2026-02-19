@@ -1,27 +1,23 @@
-export const dynamic = 'force-dynamic'
+
 import { DeployButton } from "@/components/deploy-button";
-export const dynamic = 'force-dynamic'
+
 import { EnvVarWarning } from "@/components/env-var-warning";
-export const dynamic = 'force-dynamic'
+
 import { AuthButton } from "@/components/auth-button";
-export const dynamic = 'force-dynamic'
+
 import { Hero } from "@/components/hero";
-export const dynamic = 'force-dynamic'
+
 import { ThemeSwitcher } from "@/components/theme-switcher";
-export const dynamic = 'force-dynamic'
+
 import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-export const dynamic = 'force-dynamic'
+
 import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
-export const dynamic = 'force-dynamic'
+
 import { hasEnvVars } from "@/lib/utils";
-export const dynamic = 'force-dynamic'
+
 import Link from "next/link";
-export const dynamic = 'force-dynamic'
+
 import { Suspense } from "react";
-export const dynamic = 'force-dynamic'
-
-export const dynamic = 'force-dynamic' 
-
 
 export default function Home() {
   return (

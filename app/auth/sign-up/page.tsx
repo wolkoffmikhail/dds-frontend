@@ -1,6 +1,5 @@
-export const dynamic = 'force-dynamic'
+
 import { SignUpForm } from "@/components/sign-up-form";
-export const dynamic = 'force-dynamic'
 
 export default function Page() {
   return (

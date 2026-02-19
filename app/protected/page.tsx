@@ -1,15 +1,10 @@
-export const dynamic = 'force-dynamic'
+
 import { redirect } from "next/navigation";
-export const dynamic = 'force-dynamic'
 
 import { createClient } from "@/lib/supabase/server";
-export const dynamic = 'force-dynamic'
 import { InfoIcon } from "lucide-react";
-export const dynamic = 'force-dynamic'
 import { FetchDataSteps } from "@/components/tutorial/fetch-data-steps";
-export const dynamic = 'force-dynamic'
 import { Suspense } from "react";
-export const dynamic = 'force-dynamic'
 
 async function UserDetails() {
   const supabase = await createClient();

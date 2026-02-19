@@ -1,8 +1,7 @@
-export const dynamic = 'force-dynamic'
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-export const dynamic = 'force-dynamic'
+
 import { Suspense } from "react";
-export const dynamic = 'force-dynamic'
 
 async function ErrorContent({
   searchParams,

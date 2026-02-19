@@ -1,6 +1,5 @@
-export const dynamic = 'force-dynamic'
+
 import {
-export const dynamic = 'force-dynamic'
   Card,
   CardContent,
   CardDescription,
