@@ -1,39 +1,26 @@
-'use client'
+"use client"
 
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr"
+
+function getBrowserSupabaseUrl() {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
+  const path = raw.startsWith("/") ? raw : `/${raw}`
+  return `${window.location.origin}${path}`
+}
 
 export function createClient() {
+  const supabaseUrl = getBrowserSupabaseUrl()
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  console.log('SUPABASE CLIENT DEBUG');
-  console.log('1. URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log('2. PUBLISHABLE_KEY:', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
-  console.log('3. ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  console.log('4. Все NEXT_PUBLIC переменные:');
-  
-
-  Object.keys(process.env).forEach(key => {
-    if (key.startsWith('NEXT_PUBLIC_')) {
-      console.log(`   ${key}:`, process.env[key]);
-    }
-  });
-
-  // Проверка на undefined
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL is undefined!');
-  }
-  if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    console.error('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is undefined!');
+  if (!supabaseKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / NEXT_PUBLIC_SUPABASE_ANON_KEY")
   }
 
-  try {
-    const client = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    );
-    console.log('Supabase client created successfully');
-    return client;
-  } catch (error) {
-    console.error('Failed to create Supabase client:', error);
-    throw error;
-  }
+  return createBrowserClient(supabaseUrl, supabaseKey, {
+  cookieOptions: { name: "sb-auth" },
+  })
+
 }

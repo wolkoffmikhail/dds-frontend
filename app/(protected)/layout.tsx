@@ -1,6 +1,8 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
 
+export const dynamic = "force-dynamic"
+
 export default function ProtectedLayout({
   children,
 }: {

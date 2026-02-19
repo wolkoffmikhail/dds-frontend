@@ -1,41 +1,38 @@
-'use client'
+"use client"
 
-import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createBrowserClient } from "@supabase/ssr"
+import { createContext, useContext, useMemo } from "react"
 
-const SupabaseContext = createContext<any>(null)
+type SupabaseClientType = ReturnType<typeof createBrowserClient>
 
-export const useSupabase = () => {
-  const context = useContext(SupabaseContext)
-  if (!context) {
-    throw new Error('useSupabase must be used within a SupabaseProvider')
-  }
-  return context
+const SupabaseContext = createContext<SupabaseClientType | null>(null)
+
+export function useSupabase() {
+  const client = useContext(SupabaseContext)
+  if (!client) throw new Error("useSupabase must be used within SupabaseProvider")
+  return client
 }
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
-  const [supabase] = useState(() =>
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-  )
+  const supabase = useMemo(() => {
+    const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
+    const supabaseUrl =
+      raw.startsWith("http://") || raw.startsWith("https://")
+        ? raw
+        : `${window.location.origin}${raw}`
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      router.refresh()
-    })
+    const supabaseKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-    return () => {
-      subscription.unsubscribe()
+    if (!supabaseKey) {
+      throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY (or PUBLISHABLE_KEY)")
     }
-  }, [router, supabase])
 
-  return (
-    <SupabaseContext.Provider value={{ supabase }}>
-      {children}
-    </SupabaseContext.Provider>
-  )
+    return createBrowserClient(supabaseUrl, supabaseKey, {
+      cookieOptions: { name: "sb-auth" },
+    })
+  }, [])
+
+  return <SupabaseContext.Provider value={supabase}>{children}</SupabaseContext.Provider>
 }

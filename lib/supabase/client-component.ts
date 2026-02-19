@@ -1,10 +1,22 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr"
 
-// Этот файл будет автоматически помечен как клиентский
 export function createClientComponent() {
-  // Здесь process.env работает, потому что Next.js подставляет значения на этапе сборки
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  );
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
+  const supabaseUrl =
+    raw.startsWith("http://") || raw.startsWith("https://")
+      ? raw
+      : `${window.location.origin}${raw.startsWith("/") ? raw : `/${raw}`}`
+
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / NEXT_PUBLIC_SUPABASE_ANON_KEY")
+  }
+
+  return createBrowserClient(supabaseUrl, supabaseKey, {
+  cookieOptions: { name: "sb-auth" },
+  })
+
 }
