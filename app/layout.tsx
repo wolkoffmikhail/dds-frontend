@@ -11,8 +11,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "EXCLUSIVE",
-  description: "Single-object cashflow and balances workspace for EXCLUSIVE.",
+  title: "Росстрой",
+  description: "Multiobject cashflow and balances workspace for Росстрой.",
 };
 
 export default function RootLayout({

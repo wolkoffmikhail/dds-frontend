@@ -161,7 +161,7 @@ export function AppSidebar() {
           </div>
           {!collapsed ? (
             <span className="text-base font-semibold tracking-tight text-sidebar-foreground">
-              EXCLUSIVE
+              Росстрой
             </span>
           ) : null}
         </div>
@@ -242,7 +242,7 @@ export function AppSidebar() {
         </div>
         {!collapsed ? (
           <p className="px-3 py-3 text-xs text-sidebar-foreground/40">
-            Single-object cashflow
+            multiobject
           </p>
         ) : null}
       </div>
