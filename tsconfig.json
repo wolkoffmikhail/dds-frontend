@@ -84,11 +84,7 @@
     ".next-check-upload-harden/types/**/*.ts",
     ".next-check-upload-harden/dev/types/**/*.ts",
     ".next-check-reconciliation/types/**/*.ts",
-    ".next-check-reconciliation/dev/types/**/*.ts",
-    ".next-holding-webpack/types/**/*.ts",
-    ".next-holding-webpack/dev/types/**/*.ts",
-    ".next-exclusive/types/**/*.ts",
-    ".next-exclusive/dev/types/**/*.ts"
+    ".next-check-reconciliation/dev/types/**/*.ts"
   ],
   "exclude": [
     "**/_backups_*",

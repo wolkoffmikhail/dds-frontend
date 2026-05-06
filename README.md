@@ -1,13 +1,10 @@
-﻿# EXCLUSIVE frontend
+﻿# Росстрой frontend
 
-Frontend for the single-object EXCLUSIVE cashflow workspace.
+Frontend for the multiobject Росстрой cashflow workspace.
 
 ## Scope
 
-The application is simplified relative to DDS:
-- one project object only
-- no balance-object selector
-- no payout-object selector
+The application is adapted for the current multiobject workspace:
 - dashboard, balances, income registry, expense registry
 - Supabase-backed views and RPC from `schema_v1.sql`
 
@@ -44,7 +41,7 @@ RPC:
 
 ## Next steps
 
-1. Apply `schema_v1.sql` to the new EXCLUSIVE database.
+1. Apply `schema_v1.sql` to the target Росстрой database.
 2. Apply `seed.sql` for demo data.
 3. Fill `.env.local` with the new Supabase values.
 4. Install dependencies.
