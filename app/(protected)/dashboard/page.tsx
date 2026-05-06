@@ -1,140 +1,230 @@
-"use client"
+﻿"use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { Wallet, ArrowDownLeft, ArrowUpRight, TrendingUp } from "lucide-react"
+
 import { createClient } from "@/lib/supabase/client"
 import { KpiCard } from "@/components/kpi-card"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { CashflowChart } from "@/components/cashflow-chart"
 import { TopExpensesTable } from "@/components/top-expenses-table"
-import { Wallet, ArrowDownLeft, ArrowUpRight, TrendingUp } from "lucide-react"
-import { format, startOfMonth, endOfMonth } from "date-fns"
+import { useSharedPeriod } from "@/lib/use-shared-period"
+
+type ChartRow = { dt: string; inflow: number; outflow: number; net: number }
+type ChartApiRow = {
+  dt: string | null
+  inflow: number | string | null
+  outflow: number | string | null
+  net: number | string | null
+}
+type TopExpenseRow = { expense_code: string; expense_name: string; total: number }
+type TopExpenseApiRow = {
+  expense_code: string | null
+  expense_name: string | null
+  total: number | string | null
+}
+type KpiRow = {
+  balance_start: number | string | null
+  inflow: number | string | null
+  outflow: number | string | null
+  net: number | string | null
+  balance_end: number | string | null
+}
+
+type AccountLookupRow = {
+  account_id: string | null
+  account_type: string | null
+  include_in_operating_reports: boolean | null
+}
+
+type SnapshotRow = {
+  account_id: string | null
+  snapshot_date: string | null
+  balance: number | string | null
+}
+
+type OperatingBalanceSplit = {
+  bank: number
+  cash: number
+}
+
+function getEmptyBalanceSplit(): OperatingBalanceSplit {
+  return { bank: 0, cash: 0 }
+}
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("ru-RU", {
     style: "currency",
-    currency: "USD",
+    currency: "RUB",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value)
 }
 
+function renderBalanceBreakdown(split: OperatingBalanceSplit) {
+  return (
+    <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <span>Расчетный счет</span>
+        <span className="font-mono">{formatCurrency(split.bank)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span>Касса</span>
+        <span className="font-mono">{formatCurrency(split.cash)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t pt-1 text-foreground/80">
+        <span>Итого</span>
+        <span className="font-mono">{formatCurrency(split.bank + split.cash)}</span>
+      </div>
+    </div>
+  )
+}
+
+function calculateSplitForDate(
+  targetDate: string,
+  accounts: AccountLookupRow[],
+  snapshots: SnapshotRow[]
+) {
+  const latestByAccount = new Map<string, number>()
+
+  for (const row of snapshots) {
+    const accountId = String(row.account_id ?? "")
+    const snapshotDate = String(row.snapshot_date ?? "")
+    if (!accountId || !snapshotDate || snapshotDate > targetDate) continue
+    if (latestByAccount.has(accountId)) continue
+    latestByAccount.set(accountId, Number(row.balance) || 0)
+  }
+
+  return accounts.reduce<OperatingBalanceSplit>((acc, account) => {
+    const accountId = String(account.account_id ?? "")
+    const amount = latestByAccount.get(accountId) ?? 0
+    if (account.account_type === "cash") {
+      acc.cash += amount
+    } else {
+      acc.bank += amount
+    }
+    return acc
+  }, getEmptyBalanceSplit())
+}
+
 export default function DashboardPage() {
-  const now = new Date()
-  const [from, setFrom] = useState(format(startOfMonth(now), "yyyy-MM-dd"))
-  const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"))
+  const { from, to, setFrom, setTo, ready } = useSharedPeriod()
   const [kpis, setKpis] = useState({
-    balance: 0,
+    balance_start: 0,
     inflow: 0,
     outflow: 0,
     net: 0,
+    balance_end: 0,
   })
-  const [chartData, setChartData] = useState<
-    { dt: string; inflow: number; outflow: number; net: number }[]
-  >([])
-  const [topExpenses, setTopExpenses] = useState<
-    { expense_code: string; expense_name: string; total: number }[]
-  >([])
-  const [loading, setLoading] = useState(true)
+  const [chartData, setChartData] = useState<ChartRow[]>([])
+  const [topExpenses, setTopExpenses] = useState<TopExpenseRow[]>([])
+  const [balanceSplit, setBalanceSplit] = useState<{
+    start: OperatingBalanceSplit
+    end: OperatingBalanceSplit
+  }>({
+    start: getEmptyBalanceSplit(),
+    end: getEmptyBalanceSplit(),
+  })
+  const [loading, setLoading] = useState<boolean>(true)
 
   const fetchData = useCallback(async () => {
+    if (!ready) return
     setLoading(true)
     const supabase = createClient()
 
-    const [balanceRes, inflowRes, outflowRes, chartRes, expenseRes] =
-      await Promise.all([
-        supabase
-          .from("v_latest_balance_per_balance_object")
-          .select("balance"),
-        supabase
-          .from("fct_cash_in")
-          .select("amount")
-          .gte("income_date", from)
-          .lte("income_date", to),
-        supabase
-          .from("fct_cash_out")
-          .select("amount")
-          .gte("payment_date", from)
-          .lte("payment_date", to),
-        supabase
-          .from("v_cashflow_daily")
-          .select("dt, inflow, outflow, net")
-          .gte("dt", from)
-          .lte("dt", to)
-          .order("dt", { ascending: true }),
-        supabase
-          .from("fct_cash_out")
-          .select("expense_code, amount")
-          .gte("payment_date", from)
-          .lte("payment_date", to),
-      ])
+    const [kpiRes, chartRes, topExpensesRes, accountsRes] = await Promise.all([
+      supabase.rpc("rpc_dashboard_kpis", {
+        p_date_from: from,
+        p_date_to: to,
+      }),
+      supabase
+        .from("v_cashflow_daily")
+        .select("dt, inflow, outflow, net")
+        .gte("dt", from)
+        .lte("dt", to)
+        .order("dt", { ascending: true }),
+      supabase.rpc("rpc_top_expenses", {
+        p_date_from: from,
+        p_date_to: to,
+        p_limit: 10,
+      }),
+      supabase
+        .from("dim_account")
+        .select("account_id, account_type, include_in_operating_reports")
+        .in("account_type", ["bank", "cash"])
+        .eq("include_in_operating_reports", true),
+    ])
 
-    const totalBalance =
-      balanceRes.data?.reduce(
-        (sum, r) => sum + (Number(r.balance) || 0),
-        0
-      ) ?? 0
+    if (kpiRes.error) console.error("rpc_dashboard_kpis error", kpiRes.error)
+    if (chartRes.error) console.error("v_cashflow_daily error", chartRes.error)
+    if (topExpensesRes.error) console.error("rpc_top_expenses error", topExpensesRes.error)
+    if (accountsRes.error) console.error("dim_account error", accountsRes.error)
 
-    const totalInflow =
-      inflowRes.data?.reduce(
-        (sum, r) => sum + (Number(r.amount) || 0),
-        0
-      ) ?? 0
-
-    const totalOutflow =
-      outflowRes.data?.reduce(
-        (sum, r) => sum + (Number(r.amount) || 0),
-        0
-      ) ?? 0
+    const kpiRow = (kpiRes.data?.[0] ?? null) as KpiRow | null
 
     setKpis({
-      balance: totalBalance,
-      inflow: totalInflow,
-      outflow: totalOutflow,
-      net: totalInflow - totalOutflow,
+      balance_start: Number(kpiRow?.balance_start) || 0,
+      inflow: Number(kpiRow?.inflow) || 0,
+      outflow: Number(kpiRow?.outflow) || 0,
+      net: Number(kpiRow?.net) || 0,
+      balance_end: Number(kpiRow?.balance_end) || 0,
     })
 
     setChartData(
-      (chartRes.data ?? []).map((r) => ({
-        dt: r.dt,
-        inflow: Number(r.inflow) || 0,
-        outflow: Number(r.outflow) || 0,
-        net: Number(r.net) || 0,
+      ((chartRes.data ?? []) as ChartApiRow[]).map((row) => ({
+        dt: String(row.dt ?? ""),
+        inflow: Number(row.inflow) || 0,
+        outflow: Number(row.outflow) || 0,
+        net: Number(row.net) || 0,
       }))
-    )
-
-    // Aggregate expenses by code client-side, then fetch dim_expense_code
-    const expenseMap = new Map<string, number>()
-    for (const r of expenseRes.data ?? []) {
-      const code = r.expense_code ?? "UNKNOWN"
-      expenseMap.set(code, (expenseMap.get(code) ?? 0) + (Number(r.amount) || 0))
-    }
-    const sortedExpenses = Array.from(expenseMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-
-    // Fetch expense code names
-    const codes = sortedExpenses.map(([code]) => code)
-    const dimRes = codes.length
-      ? await supabase
-          .from("dim_expense_code")
-          .select("expense_code, expense_name")
-          .in("expense_code", codes)
-      : { data: [] }
-
-    const nameMap = new Map(
-      (dimRes.data ?? []).map((r) => [r.expense_code, r.expense_name])
     )
 
     setTopExpenses(
-      sortedExpenses.map(([code, total]) => ({
-        expense_code: code,
-        expense_name: nameMap.get(code) ?? code,
-        total,
+      ((topExpensesRes.data ?? []) as TopExpenseApiRow[]).map((row) => ({
+        expense_code: String(row.expense_code ?? ""),
+        expense_name: String(row.expense_name ?? row.expense_code ?? ""),
+        total: Number(row.total) || 0,
       }))
     )
 
+    const operatingAccounts = ((accountsRes.data ?? []) as AccountLookupRow[]).filter(
+      (row) => Boolean(row.account_id)
+    )
+
+    if (operatingAccounts.length > 0) {
+      const accountIds = operatingAccounts
+        .map((row) => String(row.account_id ?? ""))
+        .filter(Boolean)
+
+      const { data: snapshotData, error: snapshotError } = await supabase
+        .from("fct_balance_snapshot")
+        .select("account_id, snapshot_date, balance")
+        .in("account_id", accountIds)
+        .lte("snapshot_date", to)
+        .order("snapshot_date", { ascending: false })
+
+      if (snapshotError) {
+        console.error("fct_balance_snapshot error", snapshotError)
+        setBalanceSplit({
+          start: getEmptyBalanceSplit(),
+          end: getEmptyBalanceSplit(),
+        })
+      } else {
+        const snapshots = (snapshotData ?? []) as SnapshotRow[]
+        setBalanceSplit({
+          start: calculateSplitForDate(from, operatingAccounts, snapshots),
+          end: calculateSplitForDate(to, operatingAccounts, snapshots),
+        })
+      }
+    } else {
+      setBalanceSplit({
+        start: getEmptyBalanceSplit(),
+        end: getEmptyBalanceSplit(),
+      })
+    }
+
     setLoading(false)
-  }, [from, to])
+  }, [from, to, ready])
 
   useEffect(() => {
     fetchData()
@@ -146,53 +236,58 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Cash flow overview for the selected period
+            Движение денежных средств за выбранный период.
           </p>
         </div>
-        <DateRangePicker
-          from={from}
-          to={to}
-          onFromChange={setFrom}
-          onToChange={setTo}
-        />
+
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Период</div>
+          <DateRangePicker from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
-          title="Total Balance"
-          value={formatCurrency(kpis.balance)}
+          title="Баланс на начало"
+          value={formatCurrency(kpis.balance_start)}
+          description={renderBalanceBreakdown(balanceSplit.start)}
           icon={Wallet}
-          description="Latest balance across all objects"
           loading={loading}
         />
         <KpiCard
-          title="Inflow"
+          title="Поступления"
           value={formatCurrency(kpis.inflow)}
+          description="Поступления за период"
           icon={ArrowDownLeft}
-          trend="up"
-          description="Total income for period"
           loading={loading}
         />
         <KpiCard
-          title="Outflow"
+          title="Платежи"
           value={formatCurrency(kpis.outflow)}
+          description="Платежи за период"
           icon={ArrowUpRight}
-          trend="down"
-          description="Total expenses for period"
           loading={loading}
         />
         <KpiCard
-          title="Net Cash Flow"
+          title="Чистый поток"
           value={formatCurrency(kpis.net)}
+          description="Поступления минус платежи"
           icon={TrendingUp}
-          trend={kpis.net >= 0 ? "up" : "down"}
-          description="Inflow minus outflow"
+          loading={loading}
+        />
+        <KpiCard
+          title="Баланс на конец"
+          value={formatCurrency(kpis.balance_end)}
+          description={renderBalanceBreakdown(balanceSplit.end)}
+          icon={Wallet}
           loading={loading}
         />
       </div>
 
-      <CashflowChart data={chartData} loading={loading} />
-      <TopExpensesTable data={topExpenses} loading={loading} />
+      <div className="flex flex-col gap-6">
+        <CashflowChart data={chartData} loading={loading} />
+        <TopExpensesTable data={topExpenses} loading={loading} />
+      </div>
     </div>
   )
 }

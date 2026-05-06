@@ -2,10 +2,13 @@ import { createBrowserClient } from "@supabase/ssr"
 
 export function createClientComponent() {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
+  const path = raw.startsWith("/") ? raw : `/${raw}`
   const supabaseUrl =
     raw.startsWith("http://") || raw.startsWith("https://")
       ? raw
-      : `${window.location.origin}${raw.startsWith("/") ? raw : `/${raw}`}`
+      : typeof window === "undefined"
+        ? path
+        : `${window.location.origin}${path}`
 
   const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
@@ -16,7 +19,6 @@ export function createClientComponent() {
   }
 
   return createBrowserClient(supabaseUrl, supabaseKey, {
-  cookieOptions: { name: "sb-auth" },
+    cookieOptions: { name: "sb-auth" },
   })
-
 }

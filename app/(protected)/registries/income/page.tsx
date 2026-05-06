@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
@@ -12,26 +12,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { format, startOfMonth, endOfMonth } from "date-fns"
+import { useSharedPeriod } from "@/lib/use-shared-period"
 
 interface IncomeRow {
   income_date: string
   amount: number
-  object_name: string | null
   income_article_name: string | null
   payer_name: string | null
   recipient_name: string | null
+  account_name: string | null
   comment: string | null
   [key: string]: unknown
+}
+
+type IncomeArticleLookupRow = {
+  income_article_id: string | null
+  income_name: string | null
+  include_in_operating_reports?: boolean | null
+}
+
+type EntityLookupRow = {
+  entity_id: string | null
+  entity_name: string | null
+}
+
+type IncomeRegistryApiRow = {
+  income_date: string
+  amount: number | string | null
+  income_article_name: string | null
+  payer_name: string | null
+  recipient_name: string | null
+  account_name: string | null
+  comment: string | null
 }
 
 const PAGE_SIZE = 20
 
 export default function IncomeRegistryPage() {
-  const now = new Date()
-  const [from, setFrom] = useState(format(startOfMonth(now), "yyyy-MM-dd"))
-  const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"))
-  const [objectId, setObjectId] = useState<string>("all")
+  const { from, to, setFrom, setTo, ready } = useSharedPeriod()
   const [incomeArticleId, setIncomeArticleId] = useState<string>("all")
   const [payerEntityId, setPayerEntityId] = useState<string>("all")
   const [page, setPage] = useState(1)
@@ -41,8 +59,6 @@ export default function IncomeRegistryPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // Dimension lookups
-  const [objects, setObjects] = useState<{ id: string; name: string }[]>([])
   const [articles, setArticles] = useState<{ id: string; name: string }[]>([])
   const [payers, setPayers] = useState<{ id: string; name: string }[]>([])
 
@@ -50,48 +66,40 @@ export default function IncomeRegistryPage() {
     const supabase = createClient()
     Promise.all([
       supabase
-        .from("dim_object_payout")
-        .select("id, object_name")
-        .order("object_name"),
-      supabase
         .from("dim_income_article")
-        .select("id, income_name")
+        .select("income_article_id, income_name, include_in_operating_reports")
+        .eq("include_in_operating_reports", true)
         .order("income_name"),
       supabase
         .from("dim_entity")
-        .select("id, entity_name")
+        .select("entity_id, entity_name")
         .order("entity_name"),
-    ]).then(([objRes, artRes, entRes]) => {
-      setObjects(
-        (objRes.data ?? []).map((r) => ({
-          id: String(r.id),
-          name: r.object_name,
-        }))
-      )
+    ]).then(([artRes, entRes]) => {
       setArticles(
-        (artRes.data ?? []).map((r) => ({
-          id: String(r.id),
-          name: r.income_name,
+        ((artRes.data ?? []) as IncomeArticleLookupRow[]).map((row) => ({
+          id: String(row.income_article_id ?? ""),
+          name: row.income_name ?? "",
         }))
       )
       setPayers(
-        (entRes.data ?? []).map((r) => ({
-          id: String(r.id),
-          name: r.entity_name,
+        ((entRes.data ?? []) as EntityLookupRow[]).map((row) => ({
+          id: String(row.entity_id ?? ""),
+          name: row.entity_name ?? "",
         }))
       )
     })
   }, [])
 
   const fetchData = useCallback(async () => {
+    if (!ready) return
     setLoading(true)
     const supabase = createClient()
     const offset = (page - 1) * PAGE_SIZE
 
     let query = supabase
-      .from("fct_cash_in")
+      .from("v_income_registry")
       .select(
-        "income_date, amount, object_id, income_article_id, payer_entity_id, comment",
+        "income_date, amount, income_article_id, income_article_name, payer_entity_id, payer_name, recipient_name, account_name, comment",
         { count: "exact" }
       )
       .gte("income_date", from)
@@ -99,9 +107,6 @@ export default function IncomeRegistryPage() {
       .order(sortKey as "income_date", { ascending: sortDir === "asc" })
       .range(offset, offset + PAGE_SIZE - 1)
 
-    if (objectId !== "all") {
-      query = query.eq("object_id", objectId)
-    }
     if (incomeArticleId !== "all") {
       query = query.eq("income_article_id", incomeArticleId)
     }
@@ -111,62 +116,20 @@ export default function IncomeRegistryPage() {
 
     const { data: rows, count } = await query
 
-    // Resolve names
-    const objIds = [...new Set((rows ?? []).map((r) => r.object_id).filter(Boolean))]
-    const artIds = [...new Set((rows ?? []).map((r) => r.income_article_id).filter(Boolean))]
-    const entIds = [
-      ...new Set((rows ?? []).map((r) => r.payer_entity_id).filter(Boolean)),
-    ]
-
-    const [objNames, artNames, entNames] = await Promise.all([
-      objIds.length
-        ? supabase
-            .from("dim_object_payout")
-            .select("id, object_name")
-            .in("id", objIds)
-        : { data: [] },
-      artIds.length
-        ? supabase
-            .from("dim_income_article")
-            .select("id, income_name")
-            .in("id", artIds)
-        : { data: [] },
-      entIds.length
-        ? supabase
-            .from("dim_entity")
-            .select("id, entity_name")
-            .in("id", entIds)
-        : { data: [] },
-    ])
-
-    const objMap = new Map(
-      (objNames.data ?? []).map((r) => [String(r.id), r.object_name])
-    )
-    const artMap = new Map(
-      (artNames.data ?? []).map((r) => [String(r.id), r.income_name])
-    )
-    const entMap = new Map(
-      (entNames.data ?? []).map((r) => [String(r.id), r.entity_name])
-    )
-
     setData(
-      (rows ?? []).map((r) => ({
-        income_date: r.income_date,
-        amount: Number(r.amount) || 0,
-        object_name: r.object_id ? objMap.get(String(r.object_id)) ?? null : null,
-        income_article_name: r.income_article_id
-          ? artMap.get(String(r.income_article_id)) ?? null
-          : null,
-        payer_name: r.payer_entity_id
-          ? entMap.get(String(r.payer_entity_id)) ?? null
-          : null,
-        recipient_name: null,
-        comment: r.comment,
+      ((rows ?? []) as IncomeRegistryApiRow[]).map((row) => ({
+        income_date: row.income_date,
+        amount: Number(row.amount) || 0,
+        income_article_name: row.income_article_name ?? null,
+        payer_name: row.payer_name ?? null,
+        recipient_name: row.recipient_name ?? null,
+        account_name: row.account_name ?? null,
+        comment: row.comment ?? null,
       }))
     )
     setTotalCount(count ?? 0)
     setLoading(false)
-  }, [from, to, objectId, incomeArticleId, payerEntityId, page, sortKey, sortDir])
+  }, [from, to, incomeArticleId, payerEntityId, page, sortKey, sortDir, ready])
 
   useEffect(() => {
     fetchData()
@@ -174,37 +137,37 @@ export default function IncomeRegistryPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [from, to, objectId, incomeArticleId, payerEntityId])
+  }, [from, to, incomeArticleId, payerEntityId])
 
   const columns: Column<IncomeRow>[] = [
-    { key: "income_date", label: "Date", sortable: true },
+    { key: "income_date", label: "Дата", sortable: true },
     {
       key: "amount",
-      label: "Amount",
+      label: "Сумма",
       sortable: true,
       render: (row) => (
         <span className="font-mono">
-          {new Intl.NumberFormat("en-US", {
+          {new Intl.NumberFormat("ru-RU", {
             style: "currency",
-            currency: "USD",
-            minimumFractionDigits: 0,
+            currency: "RUB",
+            minimumFractionDigits: 2,
           }).format(row.amount)}
         </span>
       ),
     },
-    { key: "object_name", label: "Object" },
-    { key: "income_article_name", label: "Income Article" },
-    { key: "payer_name", label: "Payer" },
-    { key: "recipient_name", label: "Recipient" },
-    { key: "comment", label: "Comment" },
+    { key: "income_article_name", label: "Статья поступлений" },
+    { key: "payer_name", label: "Контрагент" },
+    { key: "recipient_name", label: "Получатель" },
+    { key: "account_name", label: "Счет" },
+    { key: "comment", label: "Комментарий" },
   ]
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Income Registry</h1>
+        <h1 className="text-2xl font-bold text-foreground">Реестр поступлений</h1>
         <p className="text-sm text-muted-foreground">
-          All income transactions with filters and pagination
+          Поступления по выбранным фильтрам.
         </p>
       </div>
 
@@ -216,50 +179,34 @@ export default function IncomeRegistryPage() {
           onToChange={setTo}
         />
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Object</Label>
-          <Select value={objectId} onValueChange={setObjectId}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All Objects" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Objects</SelectItem>
-              {objects.map((o) => (
-                <SelectItem key={o.id} value={o.id}>
-                  {o.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">
-            Income Article
+            Статья поступления
           </Label>
           <Select value={incomeArticleId} onValueChange={setIncomeArticleId}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="All Articles" />
+              <SelectValue placeholder="Все статьи" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Articles</SelectItem>
-              {articles.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
+              <SelectItem value="all">Все статьи</SelectItem>
+              {articles.map((article) => (
+                <SelectItem key={article.id} value={article.id}>
+                  {article.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Payer</Label>
+          <Label className="text-xs text-muted-foreground">Контрагент</Label>
           <Select value={payerEntityId} onValueChange={setPayerEntityId}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="All Payers" />
+              <SelectValue placeholder="Все контрагенты" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Payers</SelectItem>
-              {payers.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
+              <SelectItem value="all">Все контрагенты</SelectItem>
+              {payers.map((payer) => (
+                <SelectItem key={payer.id} value={payer.id}>
+                  {payer.name}
                 </SelectItem>
               ))}
             </SelectContent>

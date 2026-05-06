@@ -20,7 +20,7 @@ export function TopExpensesTable({ data, loading }: TopExpensesTableProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base font-semibold text-card-foreground">
-          Top 10 Expense Codes
+          Топ 10 Статей Расходов
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -32,20 +32,20 @@ export function TopExpensesTable({ data, loading }: TopExpensesTableProps) {
           </div>
         ) : data.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            No expense data for this period.
+            Нет расходов за выбранный период.
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Code
+                  Статья затрат
                 </TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Name
+                  Наименование статьи
                 </TableHead>
                 <TableHead className="text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Total Amount
+                  Сумма
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -57,10 +57,10 @@ export function TopExpensesTable({ data, loading }: TopExpensesTableProps) {
                   </TableCell>
                   <TableCell className="text-sm">{row.expense_name}</TableCell>
                   <TableCell className="text-right font-mono text-sm">
-                    {new Intl.NumberFormat("en-US", {
+                    {new Intl.NumberFormat("ru-RU", {
                       style: "currency",
-                      currency: "USD",
-                      minimumFractionDigits: 0,
+                      currency: "RUB",
+                      minimumFractionDigits: 2,
                     }).format(row.total)}
                   </TableCell>
                 </TableRow>

@@ -16,10 +16,13 @@ export function useSupabase() {
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => {
     const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
+    const path = raw.startsWith("/") ? raw : `/${raw}`
     const supabaseUrl =
       raw.startsWith("http://") || raw.startsWith("https://")
         ? raw
-        : `${window.location.origin}${raw}`
+        : typeof window === "undefined"
+          ? path
+          : `${window.location.origin}${path}`
 
     const supabaseKey =
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||

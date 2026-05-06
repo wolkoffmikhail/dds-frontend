@@ -28,6 +28,11 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --color-chart-1: #2563eb; /* синий */
+    --color-chart-2: #16a34a; /* зелёный */
+    --color-chart-3: #dc2626; /* красный */
+    --color-card: #e5e7eb;
+    --color-border: #e5e7eb;
     --radius: 0.5rem;
   }
   .dark {
@@ -55,6 +60,10 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    --color-chart-1: #2563eb; /* синий */
+    --color-chart-2: #16a34a; /* зелёный */
+    --color-chart-3: #dc2626; /* красный */
+    --radius: 0.5rem;
   }
 }
 

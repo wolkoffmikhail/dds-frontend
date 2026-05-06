@@ -1,11 +1,10 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { DataTable, type Column } from "@/components/data-table"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -13,28 +12,47 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { format, startOfMonth, endOfMonth } from "date-fns"
+import { useSharedPeriod } from "@/lib/use-shared-period"
 
 interface ExpenseRow {
   payment_date: string
   amount: number
-  object_name: string | null
   expense_code: string | null
   expense_name: string | null
   payer_name: string | null
   payee_name: string | null
+  account_name: string | null
   comment: string | null
   [key: string]: unknown
+}
+
+type ExpenseCodeLookupRow = {
+  expense_code: string | null
+  expense_name: string | null
+  include_in_operating_reports?: boolean | null
+}
+
+type EntityLookupRow = {
+  entity_id: string | null
+  entity_name: string | null
+}
+
+type ExpenseRegistryApiRow = {
+  payment_date: string
+  amount: number | string | null
+  expense_code: string | null
+  expense_name: string | null
+  payer_name: string | null
+  payee_name: string | null
+  account_name: string | null
+  comment: string | null
 }
 
 const PAGE_SIZE = 20
 
 export default function ExpenseRegistryPage() {
-  const now = new Date()
-  const [from, setFrom] = useState(format(startOfMonth(now), "yyyy-MM-dd"))
-  const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"))
-  const [objectId, setObjectId] = useState<string>("all")
-  const [expenseCodeFilter, setExpenseCodeFilter] = useState("")
+  const { from, to, setFrom, setTo, ready } = useSharedPeriod()
+  const [expenseCode, setExpenseCode] = useState<string>("all")
   const [payeeEntityId, setPayeeEntityId] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [sortKey, setSortKey] = useState("payment_date")
@@ -43,45 +61,47 @@ export default function ExpenseRegistryPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const [objects, setObjects] = useState<{ id: string; name: string }[]>([])
+  const [expenseCodes, setExpenseCodes] = useState<{ id: string; name: string }[]>([])
   const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
       supabase
-        .from("dim_object_payout")
-        .select("id, object_name")
-        .order("object_name"),
+        .from("dim_expense_code")
+        .select("expense_code, expense_name, include_in_operating_reports")
+        .eq("include_in_operating_reports", true)
+        .order("expense_name"),
       supabase
         .from("dim_entity")
-        .select("id, entity_name")
+        .select("entity_id, entity_name")
         .order("entity_name"),
-    ]).then(([objRes, entRes]) => {
-      setObjects(
-        (objRes.data ?? []).map((r) => ({
-          id: String(r.id),
-          name: r.object_name,
+    ]).then(([expRes, entRes]) => {
+      setExpenseCodes(
+        ((expRes.data ?? []) as ExpenseCodeLookupRow[]).map((row) => ({
+          id: String(row.expense_code ?? ""),
+          name: row.expense_name ?? "",
         }))
       )
       setEntities(
-        (entRes.data ?? []).map((r) => ({
-          id: String(r.id),
-          name: r.entity_name,
+        ((entRes.data ?? []) as EntityLookupRow[]).map((row) => ({
+          id: String(row.entity_id ?? ""),
+          name: row.entity_name ?? "",
         }))
       )
     })
   }, [])
 
   const fetchData = useCallback(async () => {
+    if (!ready) return
     setLoading(true)
     const supabase = createClient()
     const offset = (page - 1) * PAGE_SIZE
 
     let query = supabase
-      .from("fct_cash_out")
+      .from("v_expense_registry")
       .select(
-        "payment_date, amount, object_id, expense_code, payer_entity_id, payee_entity_id, comment",
+        "payment_date, amount, expense_code, expense_name, payer_name, payee_entity_id, payee_name, account_name, comment",
         { count: "exact" }
       )
       .gte("payment_date", from)
@@ -89,11 +109,8 @@ export default function ExpenseRegistryPage() {
       .order(sortKey as "payment_date", { ascending: sortDir === "asc" })
       .range(offset, offset + PAGE_SIZE - 1)
 
-    if (objectId !== "all") {
-      query = query.eq("object_id", objectId)
-    }
-    if (expenseCodeFilter.trim()) {
-      query = query.ilike("expense_code", `%${expenseCodeFilter.trim()}%`)
+    if (expenseCode !== "all") {
+      query = query.eq("expense_code", expenseCode)
     }
     if (payeeEntityId !== "all") {
       query = query.eq("payee_entity_id", payeeEntityId)
@@ -101,70 +118,21 @@ export default function ExpenseRegistryPage() {
 
     const { data: rows, count } = await query
 
-    // Resolve dimension names
-    const objIds = [...new Set((rows ?? []).map((r) => r.object_id).filter(Boolean))]
-    const entIds = [
-      ...new Set([
-        ...(rows ?? []).map((r) => r.payer_entity_id).filter(Boolean),
-        ...(rows ?? []).map((r) => r.payee_entity_id).filter(Boolean),
-      ]),
-    ]
-    const expCodes = [
-      ...new Set((rows ?? []).map((r) => r.expense_code).filter(Boolean)),
-    ]
-
-    const [objNames, entNames, expNames] = await Promise.all([
-      objIds.length
-        ? supabase
-            .from("dim_object_payout")
-            .select("id, object_name")
-            .in("id", objIds)
-        : { data: [] },
-      entIds.length
-        ? supabase
-            .from("dim_entity")
-            .select("id, entity_name")
-            .in("id", entIds)
-        : { data: [] },
-      expCodes.length
-        ? supabase
-            .from("dim_expense_code")
-            .select("expense_code, expense_name")
-            .in("expense_code", expCodes)
-        : { data: [] },
-    ])
-
-    const objMap = new Map(
-      (objNames.data ?? []).map((r) => [String(r.id), r.object_name])
-    )
-    const entMap = new Map(
-      (entNames.data ?? []).map((r) => [String(r.id), r.entity_name])
-    )
-    const expMap = new Map(
-      (expNames.data ?? []).map((r) => [r.expense_code, r.expense_name])
-    )
-
     setData(
-      (rows ?? []).map((r) => ({
-        payment_date: r.payment_date,
-        amount: Number(r.amount) || 0,
-        object_name: r.object_id ? objMap.get(String(r.object_id)) ?? null : null,
-        expense_code: r.expense_code ?? null,
-        expense_name: r.expense_code
-          ? expMap.get(r.expense_code) ?? null
-          : null,
-        payer_name: r.payer_entity_id
-          ? entMap.get(String(r.payer_entity_id)) ?? null
-          : null,
-        payee_name: r.payee_entity_id
-          ? entMap.get(String(r.payee_entity_id)) ?? null
-          : null,
-        comment: r.comment,
+      ((rows ?? []) as ExpenseRegistryApiRow[]).map((row) => ({
+        payment_date: row.payment_date,
+        amount: Number(row.amount) || 0,
+        expense_code: row.expense_code ?? null,
+        expense_name: row.expense_name ?? null,
+        payer_name: row.payer_name ?? null,
+        payee_name: row.payee_name ?? null,
+        account_name: row.account_name ?? null,
+        comment: row.comment ?? null,
       }))
     )
     setTotalCount(count ?? 0)
     setLoading(false)
-  }, [from, to, objectId, expenseCodeFilter, payeeEntityId, page, sortKey, sortDir])
+  }, [from, to, expenseCode, payeeEntityId, page, sortKey, sortDir, ready])
 
   useEffect(() => {
     fetchData()
@@ -172,40 +140,38 @@ export default function ExpenseRegistryPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [from, to, objectId, expenseCodeFilter, payeeEntityId])
+  }, [from, to, expenseCode, payeeEntityId])
 
   const columns: Column<ExpenseRow>[] = [
-    { key: "payment_date", label: "Date", sortable: true },
+    { key: "payment_date", label: "Дата", sortable: true },
     {
       key: "amount",
-      label: "Amount",
+      label: "Сумма",
       sortable: true,
       render: (row) => (
         <span className="font-mono">
-          {new Intl.NumberFormat("en-US", {
+          {new Intl.NumberFormat("ru-RU", {
             style: "currency",
-            currency: "USD",
-            minimumFractionDigits: 0,
+            currency: "RUB",
+            minimumFractionDigits: 2,
           }).format(row.amount)}
         </span>
       ),
     },
-    { key: "object_name", label: "Object" },
-    { key: "expense_code", label: "Expense Code" },
-    { key: "expense_name", label: "Expense Name" },
-    { key: "payer_name", label: "Payer" },
-    { key: "payee_name", label: "Payee" },
-    { key: "comment", label: "Comment" },
+    { key: "expense_code", label: "Статья затрат" },
+    { key: "expense_name", label: "Название статьи" },
+    { key: "payer_name", label: "Плательщик" },
+    { key: "payee_name", label: "Контрагент" },
+    { key: "account_name", label: "Счет" },
+    { key: "comment", label: "Комментарий" },
   ]
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Expense Registry
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">Реестр платежей</h1>
         <p className="text-sm text-muted-foreground">
-          All expense transactions with filters and pagination
+          Платежи по выбранным фильтрам.
         </p>
       </div>
 
@@ -217,41 +183,32 @@ export default function ExpenseRegistryPage() {
           onToChange={setTo}
         />
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Object</Label>
-          <Select value={objectId} onValueChange={setObjectId}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All Objects" />
+          <Label className="text-xs text-muted-foreground">Статья затрат</Label>
+          <Select value={expenseCode} onValueChange={setExpenseCode}>
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Все статьи" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Objects</SelectItem>
-              {objects.map((o) => (
-                <SelectItem key={o.id} value={o.id}>
-                  {o.name}
+              <SelectItem value="all">Все статьи</SelectItem>
+              {expenseCodes.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Expense Code</Label>
-          <Input
-            placeholder="Filter by code..."
-            value={expenseCodeFilter}
-            onChange={(e) => setExpenseCodeFilter(e.target.value)}
-            className="w-40"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Payee</Label>
+          <Label className="text-xs text-muted-foreground">Контрагент</Label>
           <Select value={payeeEntityId} onValueChange={setPayeeEntityId}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="All Payees" />
+              <SelectValue placeholder="Все контрагенты" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Payees</SelectItem>
-              {entities.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.name}
+              <SelectItem value="all">Все контрагенты</SelectItem>
+              {entities.map((entity) => (
+                <SelectItem key={entity.id} value={entity.id}>
+                  {entity.name}
                 </SelectItem>
               ))}
             </SelectContent>

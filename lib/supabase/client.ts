@@ -6,6 +6,7 @@ function getBrowserSupabaseUrl() {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "/supabase"
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
   const path = raw.startsWith("/") ? raw : `/${raw}`
+  if (typeof window === "undefined") return path
   return `${window.location.origin}${path}`
 }
 
@@ -20,7 +21,6 @@ export function createClient() {
   }
 
   return createBrowserClient(supabaseUrl, supabaseKey, {
-  cookieOptions: { name: "sb-auth" },
+    cookieOptions: { name: "sb-auth" },
   })
-
 }

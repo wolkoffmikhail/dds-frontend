@@ -1,6 +1,5 @@
-"use client"
+﻿"use client"
 
-import { useState } from "react"
 import {
   Table,
   TableBody,
@@ -56,7 +55,7 @@ export function DataTable<T extends Record<string, unknown>>({
               <TableHead key={col.key} className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {col.sortable && onSort ? (
                   <button
-                    className="flex items-center gap-1 hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 transition-colors hover:text-foreground"
                     onClick={() =>
                       onSort(
                         col.key,
@@ -100,7 +99,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 colSpan={columns.length}
                 className="h-32 text-center text-muted-foreground"
               >
-                No data found.
+                Нет данных.
               </TableCell>
             </TableRow>
           ) : (
